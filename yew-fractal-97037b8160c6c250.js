@@ -250,11 +250,11 @@ function getArrayU8FromWasm0(ptr, len) {
     return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
 }
 function __wbg_adapter_22(arg0, arg1, arg2) {
-    wasm.closure164_externref_shim(arg0, arg1, arg2);
+    wasm.closure191_externref_shim(arg0, arg1, arg2);
 }
 
 function __wbg_adapter_25(arg0, arg1, arg2) {
-    wasm.closure313_externref_shim(arg0, arg1, arg2);
+    wasm.closure247_externref_shim(arg0, arg1, arg2);
 }
 
 const FractalWorkerFinalization = (typeof FinalizationRegistry === 'undefined')
@@ -563,9 +563,6 @@ function __wbg_get_imports() {
         const ret = arg0.removeChild(arg1);
         return ret;
     }, arguments) };
-    imports.wbg.__wbg_removeEventListener_d365ee1c2a7b08f0 = function() { return handleError(function (arg0, arg1, arg2, arg3, arg4) {
-        arg0.removeEventListener(getStringFromWasm0(arg1, arg2), arg3, arg4 !== 0);
-    }, arguments) };
     imports.wbg.__wbg_resolve_4851785c9c5f573d = function(arg0) {
         const ret = Promise.resolve(arg0);
         return ret;
@@ -672,12 +669,12 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper1679 = function(arg0, arg1, arg2) {
-        const ret = makeClosure(arg0, arg1, 165, __wbg_adapter_22);
+    imports.wbg.__wbindgen_closure_wrapper485 = function(arg0, arg1, arg2) {
+        const ret = makeClosure(arg0, arg1, 192, __wbg_adapter_22);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper3630 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 314, __wbg_adapter_25);
+    imports.wbg.__wbindgen_closure_wrapper616 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 248, __wbg_adapter_25);
         return ret;
     };
     imports.wbg.__wbindgen_debug_string = function(arg0, arg1) {
