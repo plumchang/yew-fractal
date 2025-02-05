@@ -3,11 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <title>Rust Fractal with Yew</title>
-  <link rel="modulepreload" href="yew-fractal/yew-fractal-97037b8160c6c250.js" crossorigin="anonymous" integrity="sha384-FJVBWqOgvdj11ZpvTlW5G1r8t4r45C3cj0YHKRCoDvNdv27W2z7s0VJRyRQ1RZvV"><link rel="preload" href="yew-fractal/yew-fractal-97037b8160c6c250_bg.wasm" crossorigin="anonymous" integrity="sha384-CzR/fkKOy06nHV5nQTAyUFrPXvMReg8EUvXkKEoWiT5cKNrCwvdVYEMH1gAx6NaL" as="fetch" type="application/wasm"></head>
+  <link rel="modulepreload" href="./yew-fractal-97037b8160c6c250.js" crossorigin="anonymous" integrity="sha384-FJVBWqOgvdj11ZpvTlW5G1r8t4r45C3cj0YHKRCoDvNdv27W2z7s0VJRyRQ1RZvV"><link rel="preload" href="./yew-fractal-97037b8160c6c250_bg.wasm" crossorigin="anonymous" integrity="sha384-CzR/fkKOy06nHV5nQTAyUFrPXvMReg8EUvXkKEoWiT5cKNrCwvdVYEMH1gAx6NaL" as="fetch" type="application/wasm"></head>
   <body>
 <script type="module">
-import init, * as bindings from 'yew-fractal/yew-fractal-97037b8160c6c250.js';
-const wasm = await init({ module_or_path: 'yew-fractal/yew-fractal-97037b8160c6c250_bg.wasm' });
+import init, * as bindings from './yew-fractal-97037b8160c6c250.js';
+const wasm = await init({ module_or_path: './yew-fractal-97037b8160c6c250_bg.wasm' });
 
 
 window.wasmBindings = bindings;
