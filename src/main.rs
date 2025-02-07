@@ -148,6 +148,7 @@ fn App() -> Html {
         let is_dragging = is_dragging.clone();
 
         Callback::from(move |event: TouchEvent| {
+            event.prevent_default();
             if let Some(canvas) = canvas_ref.cast::<HtmlCanvasElement>() {
                 is_dragging.set(true);
 
@@ -183,6 +184,7 @@ fn App() -> Html {
         let draw_fractal = draw_fractal.clone();
 
         Callback::from(move |event: TouchEvent| {
+            event.prevent_default();
             if *is_dragging {
                 if let Some(canvas) = canvas_ref.cast::<HtmlCanvasElement>() {
                     let touches = event.touches();
@@ -236,6 +238,7 @@ fn App() -> Html {
         let last_pinch_distance = last_pinch_distance.clone();
 
         Callback::from(move |event: TouchEvent| {
+            event.prevent_default();
             is_dragging.set(false);
             last_pinch_distance.set(None);
         })
