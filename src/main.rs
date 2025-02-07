@@ -1,5 +1,7 @@
 use wasm_bindgen::prelude::*;
-use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, MouseEvent, WheelEvent};
+use web_sys::{
+    window, CanvasRenderingContext2d, HtmlCanvasElement, MouseEvent, TouchEvent, WheelEvent,
+};
 use yew::prelude::*;
 mod fractal;
 mod worker;
@@ -12,6 +14,8 @@ fn App() -> Html {
     let offset_y = use_state(|| -1.0);
     let is_dragging = use_state(|| false);
     let last_mouse_pos = use_state(|| (0.0, 0.0));
+    let last_touch_pos = use_state(|| (0.0, 0.0));
+    let last_pinch_distance = use_state(|| None::<f64>);
 
     let draw_fractal = {
         let canvas_ref = canvas_ref.clone();
@@ -137,30 +141,138 @@ fn App() -> Html {
         })
     };
 
+    let on_touch_start = {
+        let canvas_ref = canvas_ref.clone();
+        let last_touch_pos = last_touch_pos.clone();
+        let last_pinch_distance = last_pinch_distance.clone();
+        let is_dragging = is_dragging.clone();
+
+        Callback::from(move |event: TouchEvent| {
+            if let Some(canvas) = canvas_ref.cast::<HtmlCanvasElement>() {
+                is_dragging.set(true);
+
+                let touches = event.touches();
+                if touches.length() == 1 {
+                    // シングルタッチの場合
+                    let touch = touches.get(0).unwrap();
+                    let x = touch.client_x() as f64 - canvas.client_left() as f64;
+                    let y = touch.client_y() as f64 - canvas.client_top() as f64;
+                    last_touch_pos.set((x, y));
+                    last_pinch_distance.set(None);
+                } else if touches.length() == 2 {
+                    // ピンチ操作の場合
+                    let touch1 = touches.get(0).unwrap();
+                    let touch2 = touches.get(1).unwrap();
+                    let dx = touch1.client_x() - touch2.client_x();
+                    let dy = touch1.client_y() - touch2.client_y();
+                    let distance = ((dx * dx + dy * dy) as f64).sqrt();
+                    last_pinch_distance.set(Some(distance));
+                }
+            }
+        })
+    };
+
+    let on_touch_move = {
+        let canvas_ref = canvas_ref.clone();
+        let last_touch_pos = last_touch_pos.clone();
+        let last_pinch_distance = last_pinch_distance.clone();
+        let zoom = zoom.clone();
+        let offset_x = offset_x.clone();
+        let offset_y = offset_y.clone();
+        let is_dragging = is_dragging.clone();
+        let draw_fractal = draw_fractal.clone();
+
+        Callback::from(move |event: TouchEvent| {
+            if *is_dragging {
+                if let Some(canvas) = canvas_ref.cast::<HtmlCanvasElement>() {
+                    let touches = event.touches();
+
+                    if touches.length() == 1 {
+                        // シングルタッチの移動
+                        let touch = touches.get(0).unwrap();
+                        let x = touch.client_x() as f64 - canvas.client_left() as f64;
+                        let y = touch.client_y() as f64 - canvas.client_top() as f64;
+                        let (last_x, last_y) = *last_touch_pos;
+
+                        offset_x.set(*offset_x - (x - last_x) / *zoom);
+                        offset_y.set(*offset_y - (y - last_y) / *zoom);
+                        last_touch_pos.set((x, y));
+                        draw_fractal.emit(());
+                    } else if touches.length() == 2 {
+                        // ピンチズーム
+                        let touch1 = touches.get(0).unwrap();
+                        let touch2 = touches.get(1).unwrap();
+                        let dx = touch1.client_x() - touch2.client_x();
+                        let dy = touch1.client_y() - touch2.client_y();
+                        let distance = ((dx * dx + dy * dy) as f64).sqrt();
+
+                        if let Some(last_distance) = *last_pinch_distance {
+                            let factor = distance / last_distance;
+                            let new_zoom = *zoom * factor;
+
+                            // ピンチの中心点を計算
+                            let center_x = (touch1.client_x() + touch2.client_x()) as f64 / 2.0
+                                - canvas.client_left() as f64;
+                            let center_y = (touch1.client_y() + touch2.client_y()) as f64 / 2.0
+                                - canvas.client_top() as f64;
+
+                            let dx = center_x / *zoom - center_x / new_zoom;
+                            let dy = center_y / *zoom - center_y / new_zoom;
+
+                            offset_x.set(*offset_x + dx);
+                            offset_y.set(*offset_y + dy);
+                            zoom.set(new_zoom);
+                            draw_fractal.emit(());
+                        }
+                        last_pinch_distance.set(Some(distance));
+                    }
+                }
+            }
+        })
+    };
+
+    let on_touch_end = {
+        let is_dragging = is_dragging.clone();
+        let last_pinch_distance = last_pinch_distance.clone();
+
+        Callback::from(move |event: TouchEvent| {
+            is_dragging.set(false);
+            last_pinch_distance.set(None);
+        })
+    };
+
     // 初期レンダリング時に描画を行う
     {
+        let canvas_ref = canvas_ref.clone();
         let draw_fractal = draw_fractal.clone();
         use_effect(move || {
-            draw_fractal.emit(());
+            if let Some(canvas) = canvas_ref.cast::<HtmlCanvasElement>() {
+                // ウィンドウサイズに合わせる
+                let window = window().unwrap();
+                canvas.set_width(window.inner_width().unwrap().as_f64().unwrap() as u32);
+                canvas.set_height(window.inner_height().unwrap().as_f64().unwrap() as u32);
+                draw_fractal.emit(());
+            }
             || ()
         });
     }
 
     html! {
         <div>
-            <div style="position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.7); padding: 5px;">
+            <div style="position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.7); padding: 5px; z-index: 1;">
                 <div>{ format!("X: {:.3}", *offset_x) }</div>
                 <div>{ format!("Y: {:.3}", *offset_y) }</div>
                 <div>{ format!("Zoom: {:.1}x", *zoom / 200.0) }</div>
             </div>
             <canvas
                 ref={canvas_ref}
-                width=800
-                height=600
                 onmousedown={on_mouse_down}
                 onmousemove={on_mouse_move}
                 onmouseup={on_mouse_up}
                 onwheel={on_wheel}
+                ontouchstart={on_touch_start}
+                ontouchmove={on_touch_move}
+                ontouchend={on_touch_end}
             ></canvas>
         </div>
     }

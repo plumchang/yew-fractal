@@ -36,6 +36,11 @@ impl FractalWorker {
                     image_data[idx + 1] = (iter * 5) as u8; // G
                     image_data[idx + 2] = (iter * 3) as u8; // B
                     image_data[idx + 3] = 255; // A
+                } else {
+                    image_data[idx] = 0; // R
+                    image_data[idx + 1] = 0; // G
+                    image_data[idx + 2] = 0; // B
+                    image_data[idx + 3] = 255; // A
                 }
             }
         }
