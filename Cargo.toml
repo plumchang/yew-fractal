@@ -3,15 +3,46 @@ name = "yew-fractal"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+crate-type = ["rlib"]
+
+[[bin]]
+name = "yew-fractal"
+path = "src/main.rs"
+
+[[bin]]
+name = "fractal-worker"
+path = "src/bin/fractal-worker.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
 [dependencies]
 yew = { git = "https://github.com/yewstack/yew/", features = ["csr"] }
 wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+console_error_panic_hook = "0.1"
 web-sys = { version = "0.3", features = [
+    "Blob",
+    "BlobPropertyBag",
     "CanvasRenderingContext2d",
+    "DedicatedWorkerGlobalScope",
+    "DomRect",
+    "Element",
     "HtmlCanvasElement",
     "ImageData",
+    "Document",
+    "Location",
+    "MessageEvent",
+    "Performance",
+    "Touch",
     "TouchEvent",
     "TouchList",
-    "Touch"
+    "Url",
+    "WheelEvent",
+    "Window",
+    "Worker",
 ]}
-wasm-bindgen-futures = "0.4"

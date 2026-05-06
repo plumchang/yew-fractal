@@ -2,11 +2,25 @@
 <html>
   <head>
     <meta charset="utf-8" />
+    <base href="./" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
     <title>Rust Fractal with Yew</title>
+    
+<script type="module">
+import init, * as bindings from './yew-fractal-19b0da0c6e112d7c.js';
+const wasm = await init({ module_or_path: './yew-fractal-19b0da0c6e112d7c_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+    
     <style>
       body,
       html {
@@ -24,17 +38,6 @@
         touch-action: none;
       }
     </style>
-  <link rel="modulepreload" href="./yew-fractal-5104cc79db61c9e1.js" crossorigin="anonymous" integrity="sha384-7iVc3dVkH75mWeq0oUBsR8RA86sLseP/RhGfeMnv4eJB7XY5R11Xz+qmF3cMD7aN"><link rel="preload" href="./yew-fractal-5104cc79db61c9e1_bg.wasm" crossorigin="anonymous" integrity="sha384-yO6gGMmP9eoNI7JXDMj1IXIhhP4wFbWypIpC9y+xFQcnxHo9lYVLX59fWgylqnvZ" as="fetch" type="application/wasm"></head>
-  <body>
-<script type="module">
-import init, * as bindings from './yew-fractal-5104cc79db61c9e1.js';
-const wasm = await init({ module_or_path: './yew-fractal-5104cc79db61c9e1_bg.wasm' });
-
-
-window.wasmBindings = bindings;
-
-
-dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
-
-</script></body>
+  <link rel="modulepreload" href="./yew-fractal-19b0da0c6e112d7c.js" crossorigin="anonymous" integrity="sha384-QKTdksylOOOZcSVk3OE4X1+8fRpt6OWiOimODysiVhy8by9hC33O0XRS408jRf3p"><link rel="preload" href="./yew-fractal-19b0da0c6e112d7c_bg.wasm" crossorigin="anonymous" integrity="sha384-IK5Hq53tcXejyy0dwMUe6AKJ64d3epALgjzfY37WyqwqejQ7mm1qw+kLQsR3+hP6" as="fetch" type="application/wasm"></head>
+  <body></body>
 </html>
