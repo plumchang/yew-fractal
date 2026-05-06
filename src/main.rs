@@ -1,3 +1,7 @@
+// Rc + RefCell は Rust + WASM で「複数所有 + 内部書き換え」を行う定番パターン。
+//   - Rc<T>: 参照カウントによる共有所有権（シングルスレッド向け）
+//   - RefCell<T>: 不変参照しか取れないものに対する「内部可変性」を提供
+// JS の世界はシングルスレッドなので Rc で十分（Arc は不要）。
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -9,6 +13,9 @@ use web_sys::{
     MouseEvent, Performance, TouchEvent, Url, WheelEvent, Worker,
 };
 
+/// 現在時刻 (ms) を取得するユーティリティ。
+/// `window.performance.now()` を Rust から呼んでいる。
+/// `and_then`/`map` は Option のメソッドチェーンで、JS の Optional Chaining (`?.`) に近い。
 fn now_ms() -> f64 {
     window()
         .and_then(|w| w.performance())
@@ -16,6 +23,8 @@ fn now_ms() -> f64 {
         .unwrap_or(0.0)
 }
 
+/// 計測値。`#[derive]` でクローン可能・コピー可能・デフォルト値あり・等値比較可能を自動実装。
+/// `Copy` が付いているので所有権の移動ではなくビット単位コピーになる（軽量）。
 #[derive(Clone, Copy, Default, PartialEq)]
 struct Metrics {
     last_frame_ms: f64,
@@ -45,9 +54,7 @@ fn spawn_worker() -> Worker {
         .unwrap()
         .href();
     let script = Array::new();
-    script.push(
-        &format!(r#"importScripts("{js_url}");wasm_bindgen("{wasm_url}");"#).into(),
-    );
+    script.push(&format!(r#"importScripts("{js_url}");wasm_bindgen("{wasm_url}");"#).into());
     let bag = BlobPropertyBag::new();
     bag.set_type("text/javascript");
     let blob = Blob::new_with_str_sequence_and_options(&script, &bag).unwrap();
@@ -55,8 +62,15 @@ fn spawn_worker() -> Worker {
     Worker::new(&url).expect("failed to spawn worker")
 }
 
+/// 4 つの Worker を束ねる構造体。React 版の FractalPool クラスと同等の役割。
+///
+/// 構造体の中身を変更したい時、Yew の Callback は `Fn` を求めるため `&mut self` を取れない。
+/// そこで `Rc<RefCell<Pool>>` でラップし、複数の Callback から借用 → 一時的に書き換え可能にする。
+/// このパターンが Rust + WASM の UI 状態管理の主軸になる。
 struct Pool {
     workers: Vec<Worker>,
+    /// "ready" 通知を受け取った Worker の数。NUM_WORKERS に達するまで描画は保留する。
+    /// Rust + WASM Worker は wasm 初期化が非同期なので必要（Step 4 参照）
     ready_count: usize,
     canvas: Option<HtmlCanvasElement>,
     ctx: Option<CanvasRenderingContext2d>,
@@ -78,6 +92,9 @@ struct Pool {
 }
 
 impl Pool {
+    /// Pool を生成し、Worker × 4 を起動して onmessage を登録する。
+    /// 戻り値が `Rc<RefCell<Self>>` なのは、各 Worker のコールバックから自分自身を
+    /// 共有所有 + 内部書き換えするため。
     fn new() -> Rc<RefCell<Self>> {
         let pool = Rc::new(RefCell::new(Pool {
             workers: Vec::with_capacity(NUM_WORKERS),
@@ -98,14 +115,21 @@ impl Pool {
 
         for _ in 0..NUM_WORKERS {
             let worker = spawn_worker();
+            // pool 自身を各クロージャに「共有」するために clone（参照カウントが増えるだけ）
             let pool_ref = pool.clone();
+            // Step 4 で説明した Closure::wrap パターン。
+            // クロージャは MessageEvent を受け取って Pool::on_message に転送する。
             let onmessage = Closure::wrap(Box::new(move |msg: MessageEvent| {
                 Pool::on_message(&pool_ref, msg);
             }) as Box<dyn FnMut(MessageEvent)>);
             worker.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
+            // ブロックスコープで borrow_mut の生存期間を限定（次のループ反復で再借用するため）
             {
                 let mut p = pool.borrow_mut();
                 p.workers.push(worker);
+                // クロージャは pool に保持しないと Drop されて onmessage が無効になる。
+                // Step 4 では forget() を使ったが、ここでは Pool が生きている限り
+                // クロージャも生きるよう Vec で保持している。
                 p._onmsg.push(onmessage);
             }
         }
@@ -171,6 +195,9 @@ impl Pool {
         }
     }
 
+    /// Worker からのメッセージを処理する。`&Rc<RefCell<Self>>` を取るのは、
+    /// 借用を解放してから submit を再度呼びたいケース（queued の処理）があるため。
+    /// `&mut self` だと「借用中に再度 borrow_mut」になり panic する。
     fn on_message(pool_ref: &Rc<RefCell<Self>>, msg: MessageEvent) {
         let data = msg.data();
 
@@ -212,9 +239,7 @@ impl Pool {
                 p.received = 0;
                 if let (Some(ctx), w, h) = (&p.ctx, p.width, p.height) {
                     let clamped = wasm_bindgen::Clamped(p.img_buf.as_slice());
-                    if let Ok(image) =
-                        web_sys::ImageData::new_with_u8_clamped_array(clamped, w)
-                    {
+                    if let Ok(image) = web_sys::ImageData::new_with_u8_clamped_array(clamped, w) {
                         let _ = ctx.put_image_data(&image, 0.0, 0.0);
                         let _ = h;
                     }
@@ -243,9 +268,15 @@ impl Pool {
     }
 }
 
+/// Yew の関数コンポーネント。React の関数コンポーネントとほぼ同じ思想。
+///   - `use_state` で状態を保持（再レンダー時に値が保存される）
+///   - `use_node_ref` で DOM 要素への参照を保持
+///   - `use_mut_ref` で「再レンダー間で生き残る可変な値」を保持（React の useRef 相当）
+///   - `use_effect_with` で副作用（マウント時の初期化など）
 #[function_component]
 fn App() -> Html {
     let canvas_ref = use_node_ref();
+    // use_state は React の useState と同じ。set した時に再レンダーが起きる。
     let zoom = use_state(|| 200.0_f64);
     let offset_x = use_state(|| -2.0_f64);
     let offset_y = use_state(|| -1.0_f64);
@@ -254,29 +285,44 @@ fn App() -> Html {
     let last_pinch = use_state(|| None::<f64>);
     let metrics = use_state(Metrics::default);
 
-    // Pool は初回マウント時に1度だけ生成
+    // Pool は初回マウント時に1度だけ生成。React の useRef 同様、再レンダーで作り直されない。
+    // `Option<...>` にしているのは、初期化前は None にしておきたいため。
     let pool = use_mut_ref(|| Option::<Rc<RefCell<Pool>>>::None);
 
+    // Yew の Callback を作る定型パターン:
+    //   1. `let xxx = xxx.clone();` でブロック内に複製を持ち込む
+    //   2. `Callback::from(move |...| { ... })` で move キャプチャ
+    // これは Step 4 で説明した「move したら外でも使えなくなる」問題への対処。
+    // React の paramsRef パターンに相当するが、Yew ではこの clone 連打が定番。
     let request_draw = {
         let pool = pool.clone();
         let zoom = zoom.clone();
         let offset_x = offset_x.clone();
         let offset_y = offset_y.clone();
         Callback::from(move |_: ()| {
+            // pool は use_mut_ref なので RefCell。borrow() で読み取り専用借用。
+            // その中身（Option<Rc<RefCell<Pool>>>）の Some をパターンマッチで取り出し、
+            // borrow_mut() で Pool 本体を可変借用する。借用が二重に見えるが、
+            // 別々の RefCell なので問題ない。
             if let Some(p) = pool.borrow().as_ref() {
+                // *zoom は UseStateHandle<T> の Deref で T への参照を取り出す記法
                 p.borrow_mut().submit(*zoom, *offset_x, *offset_y);
             }
         })
     };
 
+    // 初回マウント時の副作用。React の `useEffect(() => {...}, [])` 相当。
+    // 第1引数 `()` は依存配列が空という意味で、コンポーネント生存中に1度だけ実行される。
     {
         let canvas_ref = canvas_ref.clone();
         let pool = pool.clone();
         let request_draw = request_draw.clone();
         let metrics = metrics.clone();
         use_effect_with((), move |_| {
-            // Pool 初期化
+            // Pool 初期化（Worker × 4 を起動）
             let p = Pool::new();
+            // metrics の setter を Pool に渡しておく。Pool 内で計算が完了したら
+            // この setter 経由で UI を更新する（React 版の onMetrics と同じ仕組み）
             p.borrow_mut().metrics_setter = Some(metrics);
             *pool.borrow_mut() = Some(p.clone());
 
