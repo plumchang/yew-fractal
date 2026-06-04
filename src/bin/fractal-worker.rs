@@ -68,47 +68,57 @@ fn main() {
         let h = end_y - start_y;
         let mut buf = vec![0u8; width * h * 4];
 
+        // ピクセル色塗りクロージャ。
+        // SIMD ループとスカラ端数ループの両方から呼ぶため抽出。
+        // 色付けロジックそのものはスカラ版と同じ（モジュロ動作の解説は履歴を参照）。
+        let put_pixel = |buf: &mut [u8], idx: usize, iter: u32| {
+            if iter < max_iter {
+                buf[idx] = (iter * 2) as u8;
+                buf[idx + 1] = (iter * 5) as u8;
+                buf[idx + 2] = (iter * 3) as u8;
+                buf[idx + 3] = 255;
+            } else {
+                buf[idx + 3] = 255;
+            }
+        };
+
+        // x 方向 4 ピクセル単位で SIMD（f32x4）処理し、端数はスカラで埋める。
+        // width が 4 の倍数でないケースに備え、x4_end までを SIMD、以降をスカラ。
+        let x4_end = width - (width % 4);
+
         for y in start_y..end_y {
-            for x in 0..width {
-                // ピクセル座標 → 複素平面座標
-                let c_re = (x as f64) / zoom + offset_x;
-                let c_im = (y as f64) / zoom + offset_y;
+            // 同一行内では c_im は不変。f32 と f64 を両方持っておく
+            // （SIMD 版は f32、端数のスカラ版は元と同じ f64 精度を維持）。
+            let c_im_f64 = (y as f64) / zoom + offset_y;
+            let c_im_f32 = c_im_f64 as f32;
+            let row_base = (y - start_y) * width;
 
-                // 共有モジュールの mandelbrot 関数を呼ぶ
-                let iter = fractal::mandelbrot(c_re, c_im, max_iter);
+            // ===== SIMD ループ：4 点同時計算 =====
+            let mut x = 0;
+            while x < x4_end {
+                let c_re_arr = [
+                    ((x as f64) / zoom + offset_x) as f32,
+                    (((x + 1) as f64) / zoom + offset_x) as f32,
+                    (((x + 2) as f64) / zoom + offset_x) as f32,
+                    (((x + 3) as f64) / zoom + offset_x) as f32,
+                ];
+                let c_im_arr = [c_im_f32; 4];
+                let iters = fractal::mandelbrot_x4(c_re_arr, c_im_arr, max_iter);
 
-                let idx = ((y - start_y) * width + x) * 4;
-                if iter < max_iter {
-                    // 発散：色のグラデーション
-                    //
-                    // ⚠️ React 版との挙動の違いに注意:
-                    //   - Rust の `as u8` キャストは「256 で割った余り」（モジュロ）を取る。
-                    //     例: iter=52, iter*5=260 → 260 % 256 = 4
-                    //   - JS の Uint8ClampedArray は範囲外を 255 にクランプする。
-                    //     例: iter*5=260 → 255
-                    //
-                    // つまりこのコードは React 版と「同じ計算」のつもりで書かれているが、
-                    // 実際には iter が大きい領域（深ズーム時の境界部）で全く違う色になる。
-                    // 結果として Rust 版では紫や黄色が混ざる派手な配色になる。
-                    //
-                    // 一致させたい場合は以下のようにクランプを明示する:
-                    //   buf[idx + 1] = (iter * 5).min(255) as u8;
-                    //
-                    // 今回はあえて修正せず、整数オーバーフローの扱いの違いという学びの題材
-                    // として残している（記事のおまけネタとしても触れている）。
-                    //
-                    // なお、後続で Uint8ClampedArray::copy_from で詰め直しているが、
-                    // 「u8 として 0〜255 の範囲内に丸めた値」をコピーするだけなので
-                    // クランプは効かない（クランプは「256 を超える値を代入する」時のみ発動）。
-                    buf[idx] = (iter * 2) as u8;
-                    buf[idx + 1] = (iter * 5) as u8;
-                    buf[idx + 2] = (iter * 3) as u8;
-                    buf[idx + 3] = 255;
-                } else {
-                    // 発散しなかった = 集合に含まれる：黒
-                    // R, G, B は vec! で 0 初期化済みなので alpha だけ設定すればよい
-                    buf[idx + 3] = 255;
+                for k in 0..4 {
+                    let idx = (row_base + x + k) * 4;
+                    put_pixel(&mut buf, idx, iters[k]);
                 }
+                x += 4;
+            }
+
+            // ===== 端数：従来通り 1 点ずつスカラ計算 =====
+            while x < width {
+                let c_re = (x as f64) / zoom + offset_x;
+                let iter = fractal::mandelbrot(c_re, c_im_f64, max_iter);
+                let idx = (row_base + x) * 4;
+                put_pixel(&mut buf, idx, iter);
+                x += 1;
             }
         }
 
