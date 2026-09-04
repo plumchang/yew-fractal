@@ -70,7 +70,7 @@ pub fn mandelbrot_x4(c_re: [f32; 4], c_im: [f32; 4], max_iter: u32) -> [u32; 4] 
     // .cargo/config.toml で +simd128 を全体有効化しているので、
     // この関数は wasm32 ターゲットでのみ意味のある実装を提供する。
     #[cfg(target_arch = "wasm32")]
-    unsafe {
+    {
         mandelbrot_x4_simd(c_re, c_im, max_iter)
     }
 
@@ -87,11 +87,16 @@ pub fn mandelbrot_x4(c_re: [f32; 4], c_im: [f32; 4], max_iter: u32) -> [u32; 4] 
 
 /// WASM SIMD intrinsics による本体。
 ///
-/// `#[target_feature(enable = "simd128")]` を付けるため安全境界として `unsafe fn`。
-/// 呼び出し側はビルド時に simd128 が有効なことを保証する責任を負う。
+/// `std::arch::wasm32` の SIMD intrinsics は本来 simd128 の有効化を要求するが、
+/// このクレートは `.cargo/config.toml` の `-C target-feature=+simd128` で
+/// クレート全体に simd128 が有効化されているため、通常の安全な関数として書ける
+/// （`#[target_feature]` 属性と、それが要求する `unsafe` は不要）。
+///
+/// なお、この属性を付けたとしても非対応環境向けのフォールバック経路が
+/// 生成されるわけではない。simd128 命令を含む wasm は非対応ブラウザでは
+/// モジュールの検証段階で失敗するため、対応ブラウザが前提となる（README 参照）。
 #[cfg(target_arch = "wasm32")]
-#[target_feature(enable = "simd128")]
-unsafe fn mandelbrot_x4_simd(c_re: [f32; 4], c_im: [f32; 4], max_iter: u32) -> [u32; 4] {
+fn mandelbrot_x4_simd(c_re: [f32; 4], c_im: [f32; 4], max_iter: u32) -> [u32; 4] {
     use std::arch::wasm32::*;
 
     // 配列からレーンを構築。`f32x4(a, b, c, d)` はアライメント要件なしで v128 を作れる。

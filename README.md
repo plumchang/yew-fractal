@@ -20,6 +20,18 @@ rustup target add wasm32-unknown-unknown
 cargo install --locked trunk
 ```
 
+### 対応ブラウザ
+
+マンデルブロ計算に **WebAssembly SIMD（`simd128`）** を使っているため、SIMD 対応ブラウザが必要です。
+
+| ブラウザ | 必要バージョン |
+|---|---|
+| Chrome / Edge | 91 以降 |
+| Firefox | 89 以降 |
+| Safari | 16.4 以降 |
+
+⚠️ `.cargo/config.toml` で `-C target-feature=+simd128` をクレート全体に適用しているため、**非対応環境では wasm モジュールの検証段階で失敗し、アプリ自体が起動しません**（一部機能が劣化するのではなく、画面が出ません）。スカラ版へのフォールバック経路は用意していません。
+
 ### 開発サーバ起動
 
 ```bash
