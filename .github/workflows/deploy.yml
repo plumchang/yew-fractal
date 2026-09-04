@@ -1,0 +1,75 @@
+# GitHub Pages への自動デプロイ。
+#
+# これまで dist/ を手動でコミットし gh-pages ブランチへ push していた運用を CI 化する。
+# ビルド成果物はリポジトリに含めず（.gitignore で /dist を除外）、
+# main への push のたびにこのワークフローが trunk build して Pages へ配信する。
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # Actions タブから手動実行するためのトリガ
+  workflow_dispatch:
+
+# actions/deploy-pages が OIDC トークンで Pages へ書き込むために必要な権限。
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# デプロイの同時実行を防ぐ。進行中のものはキャンセルせず完走させる
+# （途中でキャンセルすると Pages が中途半端な状態になり得るため）。
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  # ローカル開発と同じバージョンを固定し、CI とローカルで成果物を一致させる。
+  TRUNK_VERSION: 0.21.7
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Cache cargo registry and build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          # Cargo.lock が変わったらキャッシュを作り直す。
+          key: ${{ runner.os }}-cargo-wasm-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-wasm-
+
+      - name: Install Trunk
+        run: |
+          curl -fsSL "https://github.com/trunk-rs/trunk/releases/download/v${TRUNK_VERSION}/trunk-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar -xzf - -C /usr/local/bin trunk
+          trunk --version
+
+      - name: Build
+        # --release は必須（debug ビルドの wasm は最適化が効かず極端に遅い）。
+        # --public-url ./ で相対パス参照になり、Pages のサブパス配信でも動作する。
+        run: trunk build --release --public-url ./
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
