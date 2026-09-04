@@ -24,8 +24,11 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # ローカル開発と同じバージョンを固定し、CI とローカルで成果物を一致させる。
-  TRUNK_VERSION: 0.21.7
+  # wasm-opt のバージョンは Trunk のバージョンに紐づく（0.21.7 → Binaryen 116、
+  # 0.21.14 → Binaryen 123）。Binaryen 116 は新しめの rustc が出力する
+  # reference-types 命令（table.fill）を解析できず
+  # 「invalid code after misc prefix: 17」で落ちるため、0.21.14 以上が必要。
+  TRUNK_VERSION: 0.21.14
 
 jobs:
   build:
@@ -34,7 +37,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install wasm32 target
-        run: rustup target add wasm32-unknown-unknown
+        run: |
+          rustup target add wasm32-unknown-unknown
+          # ビルド失敗時の切り分け用にツールチェーンのバージョンを記録しておく。
+          rustc --version
 
       - name: Cache cargo registry and build artifacts
         uses: actions/cache@v4
