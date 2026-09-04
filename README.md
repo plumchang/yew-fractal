@@ -36,6 +36,12 @@ trunk build --release --public-url ./
 
 `dist/` 以下に成果物が出力されます。`--public-url ./` で相対パスのアセット参照になり、GitHub Pages のサブパス配信でも動作します。
 
+### デプロイ
+
+`main` への push をトリガーに `.github/workflows/deploy.yml` が上記と同じコマンドでビルドし、GitHub Pages へ自動デプロイします。`dist/` はビルド成果物なのでリポジトリでは追跡していません（`.gitignore` で除外）。
+
+Actions タブから手動実行（`workflow_dispatch`）することもできます。
+
 ### 操作方法
 
 | 操作 | 動作 |
